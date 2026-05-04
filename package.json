@@ -25,7 +25,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "git+https://github.com/ronnieops/pi-search-multi.git"
   },
   "pi": {
     "extensions": [

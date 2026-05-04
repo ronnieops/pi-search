@@ -35,13 +35,13 @@ Install is just `pi install npm:pi-search-multi` and you're good to go. The agen
 
 I also threw in a `/search-setup` command so you can add API keys interactively without editing files, and `/search-status` to see what's active.
 
-Also threw together a benchmark script — ran all 9 backends against real queries and scored relevance quality. [Tavily came out on top](https://github.com/ronnieops/pi-search) quality-wise, Exa was the fastest. The full benchmark report is in the repo if you're into that sort of thing.
+Also threw together a benchmark script — ran all 9 backends against real queries and scored relevance quality. [Tavily came out on top](https://github.com/ronnieops/pi-search-multi) quality-wise, Exa was the fastest. The full benchmark report is in the repo if you're into that sort of thing.
 
 **Caveats:** API keys live in local config files (gitignored by default, but don't be that person who commits them). Marginalia's "public" key is shared so it'll be slower under load. And some backends have pretty tight free tiers — you'll probably want 2-3 keys configured before auto mode really shines.
 
 Anyway, it's MIT licensed, open source, feedback welcome.
 
-[https://github.com/ronnieops/pi-search](https://github.com/ronnieops/pi-search)
+[https://github.com/ronnieops/pi-search-multi](https://github.com/ronnieops/pi-search-multi)
 
 ---
 
