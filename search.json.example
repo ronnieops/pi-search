@@ -1,0 +1,14 @@
+{
+  "defaultBackend": "auto",
+  "backends": {
+    "duckduckgo": { "enabled": true },
+    "marginalia": { "enabled": true },
+    "serper": { "enabled": true, "apiKey": "YOUR_SERPER_KEY" },
+    "brave": { "enabled": true, "apiKey": "YOUR_BRAVE_KEY" },
+    "tavily": { "enabled": true, "apiKey": "YOUR_TAVILY_KEY" },
+    "exa": { "enabled": true, "apiKey": "YOUR_EXA_KEY" },
+    "firecrawl": { "enabled": true, "apiKey": "YOUR_FIRECRAWL_KEY" },
+    "langsearch": { "enabled": true, "apiKey": "YOUR_LANGSEARCH_KEY" },
+    "websearchapi": { "enabled": true, "apiKey": "YOUR_WEBSEARCHAPI_KEY" }
+  }
+}

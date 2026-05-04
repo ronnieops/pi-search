@@ -1,0 +1,54 @@
+{
+  "name": "pi-search",
+  "version": "1.0.0",
+  "description": "Unified web search extension for pi with 9 backend providers — DuckDuckGo, Marginalia, Serper, Brave, Tavily, Exa, Firecrawl, LangSearch, and WebSearchAPI.ai. Auto-fallback, rate limiting, and secure key storage.",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "search",
+    "web-search",
+    "duckduckgo",
+    "marginalia",
+    "serper",
+    "tavily",
+    "exa",
+    "brave",
+    "firecrawl",
+    "langsearch",
+    "websearchapi",
+    "benchmark",
+    "ai-agent"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/pi-search.ts"
+    ],
+    "image": "https://pi.dev/assets/packages/pi-search-multi.png"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "peerDependenciesMeta": {
+    "@mariozechner/pi-ai": {
+      "optional": true
+    },
+    "@mariozechner/pi-coding-agent": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "typebox": "^1.1.24"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0"
+  }
+}
