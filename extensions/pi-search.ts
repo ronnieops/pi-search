@@ -161,7 +161,7 @@ async function searchDuckDuckGo(
 	signal?: AbortSignal,
 ): Promise<{ results: DuckDuckGoResult[] }> {
 	// Note: execSync is blocking so we cannot abort mid-execution.
-	// Check pre-abort and rely on the 20s timeout for cancellation.
+	// Check pre-abort and rely on the HTTP_TIMEOUT_MS timeout for cancellation.
 	if (signal?.aborted) throw new Error("DuckDuckGo search aborted");
 	try {
 		const pyScript = `
@@ -178,7 +178,7 @@ print(json.dumps({"results": results}))
 		try {
 			const output = execSync(`python3 "${tmpFile}"`, {
 				encoding: "utf-8",
-				timeout: 20000,
+				timeout: HTTP_TIMEOUT_MS,
 				maxBuffer: 1024 * 1024,
 			});
 			return JSON.parse(output.trim());
@@ -251,9 +251,10 @@ async function searchSerper(
 		throw new Error(`Serper ${sanitizeError(response.status, text)}`);
 	}
 	const data = (await response.json()) as Record<string, unknown>;
-	const organic = (data.organic || []) as Array<Record<string, unknown>>;
+	const rawResults = data.organic;
+	const results = Array.isArray(rawResults) ? rawResults : [];
 	return {
-		results: organic.slice(0, numResults).map((r) => ({
+		results: results.slice(0, numResults).map((r) => ({
 			title: (r.title as string) || "",
 			url: (r.link as string) || "",
 			snippet: (r.snippet as string) || "",
@@ -290,7 +291,8 @@ async function searchTavily(
 		throw new Error(`Tavily ${sanitizeError(response.status, text)}`);
 	}
 	const data = (await response.json()) as Record<string, unknown>;
-	const results = (data.results || []) as Array<Record<string, unknown>>;
+	const rawResults = data.results;
+	const results = Array.isArray(rawResults) ? rawResults : [];
 	return {
 		results: results.slice(0, numResults).map((r) => ({
 			title: (r.title as string) || "",
@@ -337,7 +339,8 @@ async function searchExa(
 		throw new Error(`Exa ${sanitizeError(response.status, detail)}`);
 	}
 	const data = (await response.json()) as Record<string, unknown>;
-	const results = (data.results || []) as Array<Record<string, unknown>>;
+	const rawResults = data.results;
+	const results = Array.isArray(rawResults) ? rawResults : [];
 	return {
 		results: results.slice(0, numResults).map((r) => ({
 			title: (r.title as string) || "",
@@ -372,8 +375,12 @@ async function searchBrave(
 		throw new Error(`Brave ${sanitizeError(response.status, text)}`);
 	}
 	const data = (await response.json()) as Record<string, unknown>;
-	const web = data.web as Record<string, unknown> | undefined;
-	const results = (web?.results || []) as Array<Record<string, unknown>>;
+	const web = data.web;
+	if (!web || typeof web !== "object") {
+		return { results: [] };
+	}
+	const rawResults = (web as Record<string, unknown>).results;
+	const results = Array.isArray(rawResults) ? rawResults : [];
 	return {
 		results: results.slice(0, numResults).map((r) => ({
 			title: (r.title as string) || "",
@@ -488,7 +495,8 @@ async function searchWebSearchAPI(
 		throw new Error(`WebSearchAPI ${sanitizeError(response.status, text)}`);
 	}
 	const data = (await response.json()) as Record<string, unknown>;
-	const organic = (data.organic || []) as Array<Record<string, unknown>>;
+	const rawResults = data.organic;
+	const organic = Array.isArray(rawResults) ? rawResults : [];
 	return {
 		results: organic.slice(0, numResults).map((r) => ({
 			title: (r.title as string) || "",
@@ -877,6 +885,7 @@ export default function (pi: ExtensionAPI) {
 	// -----------------------------------------------------------------------
 
 	pi.on("session_start", async (_event, ctx) => {
+		backendCooldowns.clear();
 		refreshConfig(ctx.cwd);
 		const status = activeBackends.join(", ");
 		ctx.ui.setStatus("search", `search: ${status}`);
