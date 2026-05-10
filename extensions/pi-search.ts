@@ -510,7 +510,7 @@ async function searchWebSearchAPI(
 // Result formatting
 // ---------------------------------------------------------------------------
 
-interface SearchResultWithBackend extends {
+interface SearchResultWithBackend {
 	title: string;
 	url: string;
 	snippet?: string;
