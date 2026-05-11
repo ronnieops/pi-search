@@ -101,20 +101,54 @@ Configure backends globally (all projects) or per-project:
   "backends": {
     "duckduckgo": { "enabled": true },
     "marginalia": { "enabled": true },
-    "serper": { "enabled": true, "apiKey": "your-serper-key" },
-    "tavily": { "enabled": true, "apiKey": "your-tavily-key" },
-    "brave": { "enabled": true, "apiKey": "your-brave-key" },
-    "exa": { "enabled": true, "apiKey": "your-exa-key" },
-    "firecrawl": { "enabled": true, "apiKey": "your-firecrawl-key" },
-    "langsearch": { "enabled": true, "apiKey": "your-langsearch-key" },
-    "websearchapi": { "enabled": true, "apiKey": "your-websearchapi-key" },
-    "perplexity": { "enabled": true, "apiKey": "your-perplexity-key" },
-    "searxng": { "enabled": true, "instanceUrl": "http://localhost:8888" }
+    "serper":     { "enabled": true, "apiKey": "SERPER_API_KEY" },
+    "tavily":     { "enabled": true, "apiKey": "TAVILY_API_KEY" },
+    "brave":      { "enabled": true, "apiKey": "BRAVE_API_KEY" },
+    "exa":        { "enabled": true, "apiKey": "EXA_API_KEY" },
+    "firecrawl":  { "enabled": true, "apiKey": "FIRECRAWL_API_KEY" },
+    "langsearch": { "enabled": true, "apiKey": "LANGSEARCH_API_KEY" },
+    "websearchapi":{ "enabled": true, "apiKey": "WEBSEARCHAPI_API_KEY" },
+    "perplexity": { "enabled": true, "apiKey": "PERPLEXITY_API_KEY" },
+    "searxng":    { "enabled": true, "instanceUrl": "http://localhost:8888" }
   }
 }
 ```
 
-See [`search.json.example`](search.json.example) for a full template.
+Set the corresponding env vars (e.g. `export SEARCH_SERPER_API_KEY="sk-..."`), or use literal keys (`"apiKey": "sk-abc123..."`), or shell commands (`"apiKey": "!pass show api/serper"`).
+
+### Credential Resolution
+
+The `apiKey` field supports four formats (following pi-web-providers convention):
+
+| `apiKey` value | Resolved from | Example |
+|---|---|---|
+| `"SERPER_API_KEY"` | `process.env.SERPER_API_KEY` | ALL_CAPS → env var |
+| `"!pass show api/serper"` | stdout of shell command (cached) | `!` prefix → exec |
+| `"sk-abc123..."` | Used as-is | Literal key (backwards compatible) |
+| *(unset)* | `SEARCH_<BACKEND>_API_KEY` env fallback | Auto-enables backend |
+
+**Env var references:** Any ALL_CAPS string is treated as an environment variable name (not a literal). `resolveConfigValue()` checks `process.env[NAME]` first.
+
+**Shell commands:** Commands prefixed with `!` are executed via `execSync` with a 5s timeout. Results are cached for the lifetime of the config cache (10s). Editing the config file clears the cache, triggering a fresh execution.
+
+**Convenience env vars:** Backends are auto-enabled when these env vars are set (even with no config entry):
+
+```bash
+export SEARCH_SERPER_API_KEY="sk-..."
+export SEARCH_TAVILY_API_KEY="sk-..."
+export SEARCH_EXA_API_KEY="sk-..."
+# ...
+```
+
+```json
+{
+  "backends": {
+    "serper": { "enabled": true, "apiKey": "SERPER_API_KEY" }
+  }
+}
+```
+
+**To rotate a shell-command key:** Update the secret in your password manager, then trigger a config reload (edit the config file, or wait 10s for automatic refresh).
 
 Or use the interactive setup:
 
@@ -151,8 +185,9 @@ Or use the interactive setup:
 ## Security
 
 - API keys are stored in local config files only (`~/.pi/agent/extensions/search.json` or `.pi/search.json`), never sent to any third party besides the chosen backend
+- **Env vars and shell commands** are supported for credential resolution — the config file is trusted (you own it), but never commit plain API keys to version control
 - DuckDuckGo queries are executed via spawned Python subprocess (no temp files, abortable via signal)
-- All HTTP backends have a 30-second timeout to prevent hanging requests
+- All HTTP backends have a 30-second timeout to prevent hanging requests; shell commands for credentials have a 5-second timeout
 - Error messages are sanitized — API response bodies are truncated and key-like patterns are redacted before being returned
 - The `.pi/` directory is in `.gitignore` — **never commit API keys to version control**
 
