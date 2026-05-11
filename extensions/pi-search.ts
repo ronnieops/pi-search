@@ -27,14 +27,24 @@
  *     "backends": {
  *       "duckduckgo": { "enabled": true },
  *       "marginalia": { "enabled": true },
- *       "serper": { "enabled": true, "apiKey": "..." },
- *       "tavily": { "enabled": true, "apiKey": "..." },
- *       "exa": { "enabled": true, "apiKey": "..." },
- *       "firecrawl": { "enabled": true, "apiKey": "..." },
- *       "langsearch": { "enabled": true, "apiKey": "..." },
- *       "websearchapi": { "enabled": true, "apiKey": "..." }
+ *       "serper": { "enabled": true, "apiKey": "SERPER_API_KEY" },
+ *       "tavily": { "enabled": true, "apiKey": "TAVILY_API_KEY" },
+ *       "exa": { "enabled": true, "apiKey": "EXA_API_KEY" },
+ *       "firecrawl": { "enabled": true, "apiKey": "FIRECRAWL_API_KEY" },
+ *       "langsearch": { "enabled": true, "apiKey": "LANGSEARCH_API_KEY" },
+ *       "websearchapi": { "enabled": true, "apiKey": "WEBSEARCHAPI_API_KEY" }
  *     }
  *   }
+ *
+ * Credential resolution (follows pi-web-providers convention):
+ *   "apiKey" in config can be any of:
+ *     • "SOME_ENV_VAR"    — read from process.env.SOME_ENV_VAR
+ *     • "!command"         — execute shell command, use its output
+ *     • "sk-..."           — literal key (not ALL_CAPS, used as-is)
+ *   Additionally, the convenience env vars below are checked as fallback:
+ *     SEARCH_SERPER_API_KEY, SEARCH_TAVILY_API_KEY, SEARCH_EXA_API_KEY,
+ *     SEARCH_BRAVE_API_KEY, SEARCH_LANGSEARCH_API_KEY, SEARCH_FIRECRAWL_API_KEY,
+ *     SEARCH_WEBSEARCHAPI_API_KEY
  */
 
 import { execSync } from "node:child_process";
@@ -74,6 +84,60 @@ function getAgentDir(): string {
 	return join(process.env.HOME || process.env.USERPROFILE || "~", ".pi", "agent");
 }
 
+/**
+ * Resolve a credential reference à la pi-web-providers:
+ *   • "!command"   → execute shell command, return trimmed stdout (cached)
+ *   • "ALL_CAPS"   → read process.env[ALL_CAPS]
+ *   • otherwise     → return as literal string (actual key)
+ */
+const commandValueCache = new Map<string, { value?: string; errorMessage?: string }>();
+
+function resolveConfigValue(reference: string | undefined): string | undefined {
+	if (!reference) return undefined;
+
+	// !command — execute shell command, cache result
+	if (reference.startsWith("!")) {
+		const cached = commandValueCache.get(reference);
+		if (cached) {
+			if (cached.errorMessage) throw new Error(cached.errorMessage);
+			return cached.value;
+		}
+		try {
+			const output = execSync(reference.slice(1), {
+				encoding: "utf-8",
+				stdio: ["ignore", "pipe", "pipe"],
+			})
+				.trim();
+			const value = output.length > 0 ? output : undefined;
+			commandValueCache.set(reference, { value });
+			return value;
+		} catch (error) {
+			const errorMessage = (error as Error).message;
+			commandValueCache.set(reference, { errorMessage });
+			throw error;
+		}
+	}
+
+	// ALL_CAPS → env var lookup
+	const envValue = process.env[reference];
+	if (envValue !== undefined) return envValue;
+	if (/^[A-Z][A-Z0-9_]*$/.test(reference)) return undefined;
+
+	// Otherwise → literal string (actual key in config)
+	return reference;
+}
+
+/** Convenience env vars checked as fallback when config has no apiKey for a backend. */
+const FALLBACK_ENV_MAP: Record<string, string> = {
+	serper: "SEARCH_SERPER_API_KEY",
+	tavily: "SEARCH_TAVILY_API_KEY",
+	exa: "SEARCH_EXA_API_KEY",
+	brave: "SEARCH_BRAVE_API_KEY",
+	langsearch: "SEARCH_LANGSEARCH_API_KEY",
+	firecrawl: "SEARCH_FIRECRAWL_API_KEY",
+	websearchapi: "SEARCH_WEBSEARCHAPI_API_KEY",
+};
+
 function loadConfig(cwd: string): SearchConfig {
 	const globalPath = join(getAgentDir(), "extensions", "search.json");
 	const projectPath = join(cwd, ".pi", "search.json");
@@ -98,12 +162,32 @@ function loadConfig(cwd: string): SearchConfig {
 			// ignore
 		}
 	}
+
+	// Auto-enable backends that have a convenience env var but no config entry yet
+	// (keys are resolved lazily at call time via resolveBackendKey)
+	for (const [backend, envVar] of Object.entries(FALLBACK_ENV_MAP)) {
+		const envValue = process.env[envVar];
+		if (envValue && envValue.trim().length > 0) {
+			const existing = config.backends?.[backend as keyof typeof config.backends];
+			if (!existing || existing.enabled === undefined) {
+				if (!config.backends) config.backends = {};
+				(config.backends as Record<string, BackendConfig>)[backend] = {
+					...existing,
+					enabled: true,
+				};
+			}
+		}
+	}
+
 	return config;
 }
 
 const MISSING_KEY_HELP =
-	"Set the API key in ~/.pi/agent/extensions/search.json or project .pi/search.json, " +
-	"or use duckduckgo which needs no key.";
+	"Set the API key via env var (e.g. SEARCH_<BACKEND>_API_KEY), " +
+	"config reference (e.g. \"apiKey\": \"SOME_ENV_VAR\"), " +
+	"shell command (\"apiKey\": \"!pass show api/backend\"), " +
+	"or a literal key in ~/.pi/agent/extensions/search.json or .pi/search.json. " +
+	"DuckDuckGo & Marginalia need no key.";
 
 const HTTP_TIMEOUT_MS = 30_000;
 
@@ -573,6 +657,47 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	// -----------------------------------------------------------------------
+	// Resolving credentials
+	// -----------------------------------------------------------------------
+
+	/** Lazily resolve a backend's API key: config reference → env → convenience env → undefined. */
+	function resolveBackendKey(backend: string): string | undefined {
+		const bc = config.backends?.[backend as keyof typeof config.backends];
+		if (bc?.apiKey) {
+			const resolved = resolveConfigValue(bc.apiKey);
+			if (resolved) return resolved;
+		}
+		const fallbackEnv = FALLBACK_ENV_MAP[backend];
+		if (fallbackEnv) {
+			const envValue = process.env[fallbackEnv];
+			if (envValue && envValue.trim().length > 0) return envValue.trim();
+		}
+		return undefined;
+	}
+
+	/** Describe where a backend's key comes from (for search-status display). */
+	function getKeySource(backend: string): { configured: boolean; source: string } {
+		const bc = config.backends?.[backend as keyof typeof config.backends];
+		if (!bc?.apiKey) {
+			const fallbackEnv = FALLBACK_ENV_MAP[backend];
+			if (fallbackEnv && process.env[fallbackEnv]) {
+				return { configured: true, source: `env:${fallbackEnv}` };
+			}
+			return { configured: false, source: "" };
+		}
+		const ref = bc.apiKey;
+		if (ref.startsWith("!")) {
+			return { configured: true, source: `shell:${ref.slice(0, 40)}...` };
+		}
+		if (/^[A-Z][A-Z0-9_]*$/.test(ref)) {
+			const envValue = process.env[ref];
+			if (envValue) return { configured: true, source: `env:${ref}` };
+			return { configured: false, source: `env:${ref} (unset)` };
+		}
+		return { configured: true, source: "literal" };
+	}
+
+	// -----------------------------------------------------------------------
 	// Backend dispatcher
 	// -----------------------------------------------------------------------
 
@@ -595,45 +720,45 @@ export default function (pi: ExtensionAPI) {
 				return marg.results;
 			}
 			case "serper": {
-				const bc = config.backends?.serper;
-				if (!bc?.apiKey) throw new Error(`Serper backend not configured. ${MISSING_KEY_HELP}`);
-				const serp = await searchSerper(query, numResults, bc.apiKey, signal);
+				const key = resolveBackendKey("serper");
+				if (!key) throw new Error(`Serper backend not configured. ${MISSING_KEY_HELP}`);
+				const serp = await searchSerper(query, numResults, key, signal);
 				return serp.results;
 			}
 			case "tavily": {
-				const bc = config.backends?.tavily;
-				if (!bc?.apiKey) throw new Error(`Tavily backend not configured. ${MISSING_KEY_HELP}`);
-				const tav = await searchTavily(query, numResults, bc.apiKey, signal);
+				const key = resolveBackendKey("tavily");
+				if (!key) throw new Error(`Tavily backend not configured. ${MISSING_KEY_HELP}`);
+				const tav = await searchTavily(query, numResults, key, signal);
 				return tav.results;
 			}
 			case "exa": {
-				const bc = config.backends?.exa;
-				if (!bc?.apiKey) throw new Error(`Exa backend not configured. ${MISSING_KEY_HELP}`);
-				const exa = await searchExa(query, numResults, bc.apiKey, signal);
+				const key = resolveBackendKey("exa");
+				if (!key) throw new Error(`Exa backend not configured. ${MISSING_KEY_HELP}`);
+				const exa = await searchExa(query, numResults, key, signal);
 				return exa.results;
 			}
 			case "brave": {
-				const bc = config.backends?.brave;
-				if (!bc?.apiKey) throw new Error(`Brave backend not configured. ${MISSING_KEY_HELP}`);
-				const br = await searchBrave(query, numResults, bc.apiKey, signal);
+				const key = resolveBackendKey("brave");
+				if (!key) throw new Error(`Brave backend not configured. ${MISSING_KEY_HELP}`);
+				const br = await searchBrave(query, numResults, key, signal);
 				return br.results;
 			}
 			case "langsearch": {
-				const bc = config.backends?.langsearch;
-				if (!bc?.apiKey) throw new Error(`LangSearch backend not configured. ${MISSING_KEY_HELP}`);
-				const ls = await searchLangSearch(query, numResults, bc.apiKey, signal);
+				const key = resolveBackendKey("langsearch");
+				if (!key) throw new Error(`LangSearch backend not configured. ${MISSING_KEY_HELP}`);
+				const ls = await searchLangSearch(query, numResults, key, signal);
 				return ls.results;
 			}
 			case "firecrawl": {
-				const bc = config.backends?.firecrawl;
-				if (!bc?.apiKey) throw new Error(`Firecrawl backend not configured. ${MISSING_KEY_HELP}`);
-				const fc = await searchFirecrawl(query, numResults, bc.apiKey, signal);
+				const key = resolveBackendKey("firecrawl");
+				if (!key) throw new Error(`Firecrawl backend not configured. ${MISSING_KEY_HELP}`);
+				const fc = await searchFirecrawl(query, numResults, key, signal);
 				return fc.results;
 			}
 			case "websearchapi": {
-				const bc = config.backends?.websearchapi;
-				if (!bc?.apiKey) throw new Error(`WebSearchAPI backend not configured. ${MISSING_KEY_HELP}`);
-				const ws = await searchWebSearchAPI(query, numResults, bc.apiKey, signal);
+				const key = resolveBackendKey("websearchapi");
+				if (!key) throw new Error(`WebSearchAPI backend not configured. ${MISSING_KEY_HELP}`);
+				const ws = await searchWebSearchAPI(query, numResults, key, signal);
 				return ws.results;
 			}
 			default:
@@ -835,15 +960,15 @@ export default function (pi: ExtensionAPI) {
 
 			for (const [name, label] of Object.entries(backendLabels)) {
 				const bc = config.backends?.[name as keyof typeof config.backends];
-				const keyConfigured = bc?.apiKey ? "✓" : "—";
+				const { configured, source } = getKeySource(name);
 				if (name === "duckduckgo") {
 					rows.push([label, "✓ enabled, key: — (free)"]);
 				} else if (name === "marginalia" && bc?.enabled) {
 					rows.push([label, "✓ enabled, key: optional (public)"]);
 				} else if (bc?.enabled) {
-					rows.push([label, `✓ enabled, key: ${keyConfigured}`]);
+					rows.push([label, `✓ enabled, key: ✓${source ? ` (${source})` : ""}`]);
 				} else {
-					rows.push([label, `— disabled, key: ${keyConfigured}`]);
+					rows.push([label, `— disabled${configured ? `, key: ✓ (${source})` : ""}`]);
 				}
 			}
 
