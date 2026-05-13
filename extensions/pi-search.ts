@@ -143,45 +143,6 @@ function clearCredentialCache(): void {
 	commandValueCache.clear();
 }
 
-/** Lazy resolution: config.apiKey → resolveConfigValue() → FALLBACK_ENV_MAP fallback. */
-function resolveBackendKey(backend: string): string | undefined {
-	const bc = config.backends?.[backend as keyof typeof config.backends];
-	if (bc?.apiKey) {
-		const resolved = resolveConfigValue(bc.apiKey);
-		if (resolved) return resolved;
-	}
-	const fallbackEnv = FALLBACK_ENV_MAP[backend];
-	if (fallbackEnv) {
-		const envValue = process.env[fallbackEnv];
-		if (envValue && envValue.trim().length > 0) return envValue.trim();
-	}
-	return undefined;
-}
-
-/** Describe where a backend's key comes from (for search-status display). */
-function getKeySource(backend: string): { configured: boolean; source: string } {
-	const bc = config.backends?.[backend as keyof typeof config.backends];
-	if (!bc?.apiKey) {
-		const fallbackEnv = FALLBACK_ENV_MAP[backend];
-		if (fallbackEnv && process.env[fallbackEnv]) {
-			return { configured: true, source: `env:${fallbackEnv}` };
-		}
-		return { configured: false, source: "" };
-	}
-	const ref = bc.apiKey;
-	if (ref.startsWith("!")) {
-		return { configured: true, source: `shell:${ref.slice(0, 40)}...` };
-	}
-	if (/^[A-Z][A-Z0-9_]*$/.test(ref)) {
-		const envValue = process.env[ref];
-		if (envValue) return { configured: true, source: `env:${ref}` };
-		return { configured: false, source: `env:${ref} (unset)` };
-	}
-	return { configured: true, source: "literal" };
-}
-
-
-
 function loadConfig(cwd: string): SearchConfig {
 	const globalPath = join(getAgentDir(), "extensions", "search.json");
 	const projectPath = join(cwd, ".pi", "search.json");
@@ -902,6 +863,43 @@ export default function (pi: ExtensionAPI) {
 	let activeBackends: string[] = [];
 	let configCacheTime = 0;
 	const CONFIG_TTL_MS = 10_000; // re-read config at most every 10s
+
+	/** Lazy resolution: config.apiKey → resolveConfigValue() → FALLBACK_ENV_MAP fallback. */
+	function resolveBackendKey(backend: string): string | undefined {
+		const bc = config.backends?.[backend as keyof typeof config.backends];
+		if (bc?.apiKey) {
+			const resolved = resolveConfigValue(bc.apiKey);
+			if (resolved) return resolved;
+		}
+		const fallbackEnv = FALLBACK_ENV_MAP[backend];
+		if (fallbackEnv) {
+			const envValue = process.env[fallbackEnv];
+			if (envValue && envValue.trim().length > 0) return envValue.trim();
+		}
+		return undefined;
+	}
+
+	/** Describe where a backend's key comes from (for search-status display). */
+	function getKeySource(backend: string): { configured: boolean; source: string } {
+		const bc = config.backends?.[backend as keyof typeof config.backends];
+		if (!bc?.apiKey) {
+			const fallbackEnv = FALLBACK_ENV_MAP[backend];
+			if (fallbackEnv && process.env[fallbackEnv]) {
+				return { configured: true, source: `env:${fallbackEnv}` };
+			}
+			return { configured: false, source: "" };
+		}
+		const ref = bc.apiKey;
+		if (ref.startsWith("!")) {
+			return { configured: true, source: `shell:${ref.slice(0, 40)}...` };
+		}
+		if (/^[A-Z][A-Z0-9_]*$/.test(ref)) {
+			const envValue = process.env[ref];
+			if (envValue) return { configured: true, source: `env:${ref}` };
+			return { configured: false, source: `env:${ref} (unset)` };
+		}
+		return { configured: true, source: "literal" };
+	}
 
 	function refreshConfig(cwd: string, force = false) {
 		const now = Date.now();
