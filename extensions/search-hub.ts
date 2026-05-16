@@ -310,7 +310,31 @@ async function searchDuckDuckGo(
 
 	const pyScript = `
 import json, sys
-from ddgs import DDGS
+try:
+    from ddgs import DDGS
+except ImportError:
+    # ddgs may be installed as a uv tool — find it and add to sys.path
+    import subprocess
+    try:
+        ddgs_bin = subprocess.check_output(["which", "ddgs"], text=True, stderr=subprocess.DEVNULL).strip()
+        if ddgs_bin:
+            import pathlib
+            # Follow symlinks to resolve to the uv tool dir
+            resolved = pathlib.Path(ddgs_bin).resolve()
+            tool_dir = resolved.parent.parent  # .../uv/tools/ddgs
+            sp_base = tool_dir / "lib"
+            found = False
+            for py_ver_dir in sorted(sp_base.iterdir(), reverse=True):
+                sp = py_ver_dir / "site-packages"
+                if sp.is_dir():
+                    sys.path.insert(0, str(sp))
+                    found = True
+                    break
+            if not found:
+                sys.exit(1)
+    except Exception:
+        sys.exit(1)
+    from ddgs import DDGS
 results = []
 with DDGS() as ddgs:
     for i, r in enumerate(ddgs.text(${JSON.stringify(query)}, max_results=${numResults})):
