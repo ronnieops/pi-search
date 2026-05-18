@@ -28,10 +28,14 @@
   "author": "",
   "license": "MIT",
   "type": "module",
+  "bugs": {
+    "url": "https://github.com/ronnieops/pi-search-hub/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ronnieops/pi-search-hub.git"
   },
+  "homepage": "https://github.com/ronnieops/pi-search-hub#readme",
   "pi": {
     "extensions": [
       "./extensions/search-hub.ts"
