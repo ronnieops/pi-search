@@ -1604,7 +1604,7 @@ export default function (pi: ExtensionAPI) {
 			refreshConfig(ctx.cwd);
 
 			const backendLabels: Record<string, string> = Object.fromEntries(
-				Object.entries(BACKEND_DEFS).map(([k, v]) => [k, `${v.label}${k === "duckduckgo" ? " (free)" : k === "marginalia" ? " (free/public key)" : ""}`])
+				Object.entries(BACKEND_DEFS).map(([k, v]) => [k, `${v.label}${k === "duckduckgo" ? " (free, no key)" : ""}`])
 			);
 
 			// Collect table rows first to compute aligned column widths
