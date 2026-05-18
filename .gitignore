@@ -12,6 +12,9 @@ search.json.local
 # Dev artifacts
 benchmark/benchmark-current-report.md
 
+# Benchmark reports
+benchmark/
+
 # Subagent session artifacts
 context.md
 research.md
@@ -25,3 +28,14 @@ extensions/ralph-loop.ts
 
 # Docs/ideation artifacts
 docs/
+
+# Personal/social media drafts
+github-meta.md
+reddit-post.md
+
+# Subagent research artifacts (generated locally)
+researcher*.md
+scout*.md
+
+# Handoff documents from subagent sessions
+handoffs/
