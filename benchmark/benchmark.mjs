@@ -243,18 +243,28 @@ async function testLangSearch(query, numResults, apiKey) {
   return { results, elapsed };
 }
 
-// --- Firecrawl ---
+// --- Firecrawl (v2) ---
 async function testFirecrawl(query, numResults, apiKey) {
   const { data, elapsed } = await testHttp(
-    "Firecrawl", "https://api.firecrawl.dev/v1/search",
+    "Firecrawl", "https://api.firecrawl.dev/v2/search",
     { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ query, limit: numResults }) },
     query
   );
-  const results = ((data.data || data.results || [])).slice(0, numResults).map(r => ({
+  // v2 response: data.data = { web: [...] } or data.data = [...] (with scrapeOptions) or data.results (v1 fallback)
+  const rawData = data.data;
+  let results = [];
+  if (Array.isArray(rawData)) {
+    results = rawData;
+  } else if (rawData && typeof rawData === "object") {
+    results = rawData.web || [];
+    if (!results.length) results = rawData.images || rawData.news || [];
+  } else if (Array.isArray(data.results)) {
+    results = data.results;
+  }
+  return { results: results.slice(0, numResults).map(r => ({
     title: r.title || "", url: r.url || "", snippet: (r.description || r.snippet || "").slice(0, 500),
-  }));
-  return { results, elapsed };
+  })), elapsed };
 }
 
 // --- WebSearchAPI ---

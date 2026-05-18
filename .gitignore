@@ -19,3 +19,9 @@ research.md
 # Other extensions (not search-related)
 extensions/lint-markdown.ts
 extensions/ralph-loop.ts
+
+# Ralph loop state (local development)
+.ralph/
+
+# Docs/ideation artifacts
+docs/

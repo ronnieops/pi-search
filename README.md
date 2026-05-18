@@ -50,14 +50,15 @@ Search for "Rust vs Go performance benchmarks" with combine=true to get results 
 
 ### Read Web Pages
 
-Fetch any URL as clean markdown — great for extracting article content, docs, or reference pages:
+Fetch any URL as clean markdown — great for extracting article content, docs, or reference pages.
+**Note: `web_read` uses [Jina Reader](https://r.jina.ai/) to fetch and convert URLs to markdown.**
 
 ```text
 Read https://docs.example.com/api-reference
 ```
 
 The `web_read` tool supports:
-- **objective** — specific question to focus extraction
+- **objective** — CSS selector to target specific content (e.g. "div.article-body")
 - **keywords** — relevant terms to highlight on long pages
 - **mode** — `rush` for speed (return innerText) or `smart` (markdown extraction)
 - **fresh** — bypass cache when freshness matters
@@ -70,13 +71,13 @@ The `web_read` tool supports:
 | 2 | **Jina AI**           | Free tier (API key req.)  |   Yes    | [jina.ai](https://jina.ai)                                        |
 | 3 | **Marginalia Search** | Unlimited (rate-limited) | **No**†  | [marginalia.nu](https://www.marginalia.nu/marginalia-search/api/) |
 | 4 | **Tavily**            | 1,000 calls/month        |   Yes    | [tavily.com](https://tavily.com)                                  |
-| 5 | **Serper** (Google)   | 2,500 queries/month      |   Yes    | [serper.dev](https://serper.dev)                                  |
+| 5 | **Serper** (Google)   | 2,500 free queries (one-time) |   Yes    | [serper.dev](https://serper.dev)                                  |
 | 6 | **Brave**             | 2,000 queries/month      |   Yes    | [brave.com/search/api](https://brave.com/search/api)              |
 | 7 | **Firecrawl**         | 500 free credits         |   Yes    | [firecrawl.dev](https://www.firecrawl.dev)                        |
-| 8 | **Exa**               | 10 QPS rate-limited      |   Yes    | [exa.ai](https://dashboard.exa.ai/api-keys)                       |
+| 8 | **Exa**               | 1,000 free queries/month  |   Yes    | [exa.ai](https://dashboard.exa.ai/api-keys)                       |
 | 9 | **LangSearch**        | Genuinely free, no CC    |   Yes    | [langsearch.com](https://langsearch.com)                          |
 | 10 | **WebSearchAPI.ai**   | 2,000 free credits       |   Yes    | [websearchapi.ai](https://www.websearchapi.ai)                    |
-| 11 | **Perplexity Sonar**  | Unlimited free queries   |   Yes    | [perplexity.ai](https://docs.perplexity.ai)                       |
+| 11 | **Perplexity Sonar**  | Paid (usage-based)        |   Yes    | [perplexity.ai](https://docs.perplexity.ai)                       |
 | 12 | **SearXNG**           | Self-hosted, unlimited   |  **No**  | [docs.searxng.org](https://docs.searxng.org)                      |
 
 > † Marginalia Search uses `public` as a shared API key — no registration required, but subject to a shared rate limit.
@@ -86,6 +87,8 @@ The `web_read` tool supports:
 > **SearXNG** is a self-hosted metasearch engine. Run your own instance (or use a public one), no API key required. Configure the instance URL in `.pi/search.json`.
 
 **Removed:** Stract, UnSearch, BoardReader, EntireWeb, Search1API, FreeAPITools.dev — no longer viable (public API removed, requires payment, or endpoint not implemented).
+
+> **Firecrawl note:** The current implementation calls `api.firecrawl.dev/v1/search`. Firecrawl has migrated to `v2/search` with a changed response shape (`data` is now an object with `web`/`images`/`news` arrays, not a flat array). The v1 endpoint may be deprecated — if Firecrawl results are empty or error, the backend needs a code update to v2.
 
 ## Configuration
 
@@ -213,6 +216,12 @@ curl -X POST "https://api.perplexity.ai/chat/completions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $KEY" \
   -d '{"model": "sonar", "messages": [{"role": "user", "content": "test"}], "search_context_size": "low"}'
+
+# Quick test Firecrawl (v2 endpoint — code still uses v1)
+curl -X POST "https://api.firecrawl.dev/v2/search" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $KEY" \
+  -d '{"query": "test", "limit": 3}'
 
 # Quick test SearXNG (replace URL with your instance)
 curl "http://localhost:8888/search?q=test&format=json&count=3"

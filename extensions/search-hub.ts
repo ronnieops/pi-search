@@ -618,7 +618,7 @@ async function searchFirecrawl(
 	signal?: AbortSignal,
 ): Promise<{ results: Array<{ title: string; url: string; snippet?: string }> }> {
 	const body = { query, limit: Math.min(numResults, 20) };
-	const response = await fetch("https://api.firecrawl.dev/v1/search", {
+	const response = await fetch("https://api.firecrawl.dev/v2/search", {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
@@ -632,7 +632,25 @@ async function searchFirecrawl(
 		throw new Error(`Firecrawl ${sanitizeError(response.status, text)}`);
 	}
 	const data = (await response.json()) as Record<string, unknown>;
-	const results = (data.data || data.results || []) as Array<Record<string, unknown>>;
+	// v2 response: data = { web: [...], images?: [...], news?: [...] } or data = [...] (backwards compat)
+	const rawData = data.data;
+	let results: Array<Record<string, unknown>> = [];
+	if (Array.isArray(rawData)) {
+		// Flat array (v2 scrapeOptions format or v1 compat)
+		results = rawData;
+	} else if (typeof rawData === "object" && rawData !== null) {
+		// v2 default: { web: [...], images?: [...], news?: [...] }
+		const obj = rawData as Record<string, unknown>;
+		results = Array.isArray(obj.web) ? obj.web : [];
+		// If no web results but there are images/news, fall back to those
+		if (results.length === 0) {
+			if (Array.isArray(obj.images)) results = obj.images as Array<Record<string, unknown>>;
+			else if (Array.isArray(obj.news)) results = obj.news as Array<Record<string, unknown>>;
+		}
+	} else if (Array.isArray(data.results)) {
+		// v1 fallback
+		results = data.results;
+	}
 	return {
 		results: results.slice(0, numResults).map((r) => ({
 			title: (r.title as string) || "",
@@ -909,7 +927,7 @@ const BACKEND_DEFS: Record<string, BackendRunner> = {
 		needsKeyFromConfig: false,
 		needsInstanceUrl: false,
 		label: "Serper",
-		setupLabel: "Serper (Google — 2500 free queries/month)",
+		setupLabel: "Serper (Google — 2500 free queries, one-time)",
 		search: async (query, numResults, { key, signal }) => {
 			const serp = await searchSerper(query, numResults, key!, signal);
 			return { results: serp.results };
@@ -931,7 +949,7 @@ const BACKEND_DEFS: Record<string, BackendRunner> = {
 		needsKeyFromConfig: false,
 		needsInstanceUrl: false,
 		label: "Exa",
-		setupLabel: "Exa (AI search — 10 QPS free tier)",
+		setupLabel: "Exa (AI search — 1000 free queries/month)",
 		search: async (query, numResults, { key, signal }) => {
 			const exa = await searchExa(query, numResults, key!, signal);
 			return { results: exa.results };
@@ -986,7 +1004,7 @@ const BACKEND_DEFS: Record<string, BackendRunner> = {
 		needsKeyFromConfig: false,
 		needsInstanceUrl: false,
 		label: "Perplexity Sonar",
-		setupLabel: "Perplexity Sonar (unlimited free queries)",
+		setupLabel: "Perplexity Sonar (paid, usage-based)",
 		search: async (query, numResults, { key, signal }) => {
 			const pp = await searchPerplexity(query, numResults, key!, signal);
 			return { results: pp.results };
